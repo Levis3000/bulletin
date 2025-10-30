@@ -1,6 +1,62 @@
+"use client";
+import { useCallback, useState } from "react";
+import { useIframeSdk } from "@whop/react";
 import Image from "next/image";
 
 export default function Home() {
+  const [loading, setLoading] = useState(false);
+  const iframeSdk = useIframeSdk();
+
+  const handlePurchase = useCallback(async () => {
+    setLoading(true);
+    try {
+      // 1) If provided, prefer an existing checkout configuration id from env
+      let checkoutConfigurationId = process.env.NEXT_PUBLIC_WHOP_CHECKOUT_CONFIGURATION_ID as string | undefined;
+      
+      // 2) Otherwise, create a checkout configuration/session on-demand (server-side)
+      if (!checkoutConfigurationId) {
+        const createRes = await fetch("/api/whop/create-checkout", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            // Optional: customize price/metadata here
+            metadata: { source: "in_app_demo" },
+          }),
+        });
+        if (!createRes.ok) {
+          const errText = await createRes.text();
+          throw new Error(`Create checkout failed: ${errText}`);
+        }
+        const created = await createRes.json();
+        // v2 returns chkcfg_..., v1 returns ch_... and purchase_url
+        if (created?.id && String(created.id).startsWith("chkcfg_")) {
+          checkoutConfigurationId = created.id;
+        } else if (created?.purchase_url) {
+          // Fallback: open purchase_url in-app via iframe SDK
+          if (!iframeSdk || typeof iframeSdk.openExternalUrl !== "function") {
+            throw new Error("Whop iframe SDK not initialized (openExternalUrl)");
+          }
+          await iframeSdk.openExternalUrl({ url: created.purchase_url });
+          setLoading(false);
+          return;
+        } else {
+          throw new Error("No checkout configuration or purchase_url returned");
+        }
+      }
+
+      if (!iframeSdk || typeof iframeSdk.inAppPurchase !== "function") {
+        throw new Error("Whop iframe SDK not initialized");
+      }
+      const result = await iframeSdk.inAppPurchase({ checkoutConfigurationId });
+      // result may include session_id and receipt_id
+      alert(`Purchase complete. Receipt: ${"receipt_id" in result ? (result as any).receipt_id : "unknown"}`);
+    } catch (err) {
+      console.error("Whop purchase error", err);
+      alert("Purchase failed. Please try again.");
+    } finally {
+      setLoading(false);
+    }
+  }, []);
   return (
     <div className="flex min-h-screen items-center justify-center bg-zinc-50 font-sans dark:bg-black">
       <main className="flex min-h-screen w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
@@ -58,6 +114,13 @@ export default function Home() {
           >
             Documentation
           </a>
+          <button
+            onClick={handlePurchase}
+            disabled={loading}
+            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
+          >
+            {loading ? "Purchasing..." : "Buy with Whop"}
+          </button>
         </div>
       </main>
     </div>
