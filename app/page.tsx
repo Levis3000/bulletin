@@ -16,6 +16,7 @@ export default function Home() {
       // 2) Otherwise, create a checkout configuration/session on-demand (server-side)
       if (!checkoutConfigurationId) {
         const preferV2 = !!(iframeSdk && typeof iframeSdk.inAppPurchase === "function");
+        console.log("[whop:client] creating checkout", { preferV2 });
         const createRes = await fetch(`/api/whop/create-checkout${preferV2 ? "?v=2" : ""}`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -29,14 +30,17 @@ export default function Home() {
           throw new Error(`Create checkout failed: ${errText}`);
         }
         const created = await createRes.json();
+        console.log("[whop:client] create response", created);
         // v2 returns chkcfg_..., v1 returns ch_... and purchase_url
         if (created?.id && String(created.id).startsWith("chkcfg_")) {
           checkoutConfigurationId = created.id;
+          console.log("[whop:client] got chkcfg id", checkoutConfigurationId);
         } else if (created?.purchase_url) {
           // Fallback: open purchase_url in-app via iframe SDK
           if (!iframeSdk || typeof iframeSdk.openExternalUrl !== "function") {
             throw new Error("Whop iframe SDK not initialized (openExternalUrl)");
           }
+          console.log("[whop:client] opening purchase_url", created.purchase_url);
           await iframeSdk.openExternalUrl({ url: created.purchase_url });
           setLoading(false);
           return;
@@ -48,6 +52,7 @@ export default function Home() {
       if (!iframeSdk || typeof iframeSdk.inAppPurchase !== "function") {
         throw new Error("Whop iframe SDK not initialized");
       }
+      console.log("[whop:client] opening modal with chkcfg id", checkoutConfigurationId);
       const result = await (iframeSdk as any).inAppPurchase({ id: checkoutConfigurationId , plan_id: "plan_1234567890"});
       // result may include session_id and receipt_id
       alert(`Purchase complete. Receipt: ${"receipt_id" in result ? (result as any).receipt_id : "unknown"}`);

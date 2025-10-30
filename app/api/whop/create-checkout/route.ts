@@ -60,6 +60,12 @@ export async function POST(req: NextRequest) {
 
     // If explicitly requested, call v2 to return a chkcfg_ configuration id for in-app modal
     if (version === "2") {
+      console.log("[whop:create-checkout] using v2", {
+        company_id,
+        has_metadata: Boolean(body?.metadata),
+        initial_price: body?.plan?.initial_price,
+        plan_type: body?.plan?.plan_type ?? "one_time",
+      });
       // Minimal v2 payload for one-time plan; merge user fields
       const v2Payload = {
         plan: {
@@ -78,6 +84,10 @@ export async function POST(req: NextRequest) {
         body: JSON.stringify(v2Payload),
       });
       const v2Json = await v2Res.json().catch(() => ({}));
+      console.log("[whop:create-checkout] v2 status", v2Res.status, {
+        id: (v2Json as any)?.id,
+        raw: v2Json,
+      });
       if (!v2Res.ok) {
         return NextResponse.json(
           { error: "Failed to create v2 checkout configuration", details: v2Json },
@@ -88,6 +98,12 @@ export async function POST(req: NextRequest) {
     }
 
     // Default: use v1 (returns ch_ session + purchase_url)
+    console.log("[whop:create-checkout] using v1", {
+      company_id,
+      currency: payload?.plan?.currency,
+      initial_price: payload?.plan?.initial_price,
+      plan_type: payload?.plan?.plan_type,
+    });
     const res = await fetch("https://api.whop.com/api/v1/checkout_configurations", {
       method: "POST",
       headers: {
@@ -98,6 +114,11 @@ export async function POST(req: NextRequest) {
     });
 
     const json = await res.json().catch(() => ({}));
+    console.log("[whop:create-checkout] v1 status", res.status, {
+      id: (json as any)?.id,
+      plan_id: (json as any)?.plan?.id,
+      has_purchase_url: Boolean((json as any)?.purchase_url),
+    });
     if (!res.ok) {
       return NextResponse.json(
         { error: "Failed to create checkout configuration", details: json },
