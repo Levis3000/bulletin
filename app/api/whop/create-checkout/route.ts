@@ -30,6 +30,8 @@ export async function POST(req: NextRequest) {
   }
 
   try {
+    const url = new URL(req.url);
+    const version = url.searchParams.get("v"); // when '2', call v2 API to get chkcfg_...
     const body = (await req.json().catch(() => ({}))) as any;
 
     // Default company id if not provided in body
@@ -56,7 +58,36 @@ export async function POST(req: NextRequest) {
       },
     };
 
-    // Use v1 since your curl succeeded against v1
+    // If explicitly requested, call v2 to return a chkcfg_ configuration id for in-app modal
+    if (version === "2") {
+      // Minimal v2 payload for one-time plan; merge user fields
+      const v2Payload = {
+        plan: {
+          company_id,
+          initial_price: body?.plan?.initial_price ?? 1000,
+          plan_type: body?.plan?.plan_type ?? "one_time",
+        },
+        metadata: body?.metadata ?? {},
+      };
+      const v2Res = await fetch("https://api.whop.com/api/v2/checkout_configurations", {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${apiKey}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(v2Payload),
+      });
+      const v2Json = await v2Res.json().catch(() => ({}));
+      if (!v2Res.ok) {
+        return NextResponse.json(
+          { error: "Failed to create v2 checkout configuration", details: v2Json },
+          { status: v2Res.status }
+        );
+      }
+      return NextResponse.json(v2Json);
+    }
+
+    // Default: use v1 (returns ch_ session + purchase_url)
     const res = await fetch("https://api.whop.com/api/v1/checkout_configurations", {
       method: "POST",
       headers: {

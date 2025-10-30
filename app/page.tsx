@@ -15,7 +15,8 @@ export default function Home() {
       
       // 2) Otherwise, create a checkout configuration/session on-demand (server-side)
       if (!checkoutConfigurationId) {
-        const createRes = await fetch("/api/whop/create-checkout", {
+        const preferV2 = !!(iframeSdk && typeof iframeSdk.inAppPurchase === "function");
+        const createRes = await fetch(`/api/whop/create-checkout${preferV2 ? "?v=2" : ""}`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
