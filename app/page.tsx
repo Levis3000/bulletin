@@ -47,7 +47,7 @@ export default function Home() {
       if (!iframeSdk || typeof iframeSdk.inAppPurchase !== "function") {
         throw new Error("Whop iframe SDK not initialized");
       }
-      const result = await iframeSdk.inAppPurchase({ id: checkoutConfigurationId });
+      const result = await (iframeSdk as any).inAppPurchase({ id: checkoutConfigurationId });
       // result may include session_id and receipt_id
       alert(`Purchase complete. Receipt: ${"receipt_id" in result ? (result as any).receipt_id : "unknown"}`);
     } catch (err) {
